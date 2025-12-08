@@ -1,6 +1,8 @@
 import { redis } from '@/lib/redis'
 import { Elysia } from 'elysia'
 import { nanoid } from 'nanoid'
+import { authMiddleware } from './auth'
+import { z } from 'zod'
 
 const ROOM_TTL_SECONDS = 60 * 10
 
@@ -16,6 +18,29 @@ const rooms = new Elysia({ prefix: "/room"})
         await redis.expire(`meta:${roomId}`, ROOM_TTL_SECONDS)
 
         return { roomId }
+    })
+
+
+const messages = new Elysia({ prefix: "/messages" })
+    .use(authMiddleware)
+    .post("/", async ({ body, auth }) => {
+        const { sender, text } = body
+        const { roomId } = auth
+
+        const roomExists = await redis.exists(`meta:${roomId}`)
+
+        if (!roomExists) {
+            throw new Error("Room does not exist")
+        }
+        
+    }, {
+        query: z.object({
+            roomId: z.string()
+        }),
+        body: z.object({
+            sender: z.string().max(100),
+            text: z.string()
+        })
     })
 
 const app = new Elysia({ prefix: '/api' })
