@@ -35,10 +35,13 @@ function Lobby() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center p-4">
       <div className="w-full max-w-md space-y-8">
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-5">
           <h1 className="text-2xl font-bold tracking-tight text-green-500">
             {">"}secure_chat
           </h1>
+          <span className="text-sm text-zinc-500">
+            Self-Destructing End-to-End Encrypted Chat App
+          </span>
         </div>
         <div className="border border-zinc-800 bg-zinc-900/50 p-6 backdrop-blur-md">
           <div className="space-y-5">
@@ -63,7 +66,7 @@ function Lobby() {
         </div>
 
         {wasDestroyed && (
-          <div className="bg-red-950/50 border border-red-900 p-4 text-center">
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-xs p-4 text-center rounded-md">
             <p className="text-red-500 text-sm font-bold">ROOM DESTROYED</p>
             <p className="text-zinc-500 text-sm mt-1">
               All messages were permanently deleted.
@@ -72,7 +75,7 @@ function Lobby() {
         )}
 
         {error === "room-not-found" && (
-          <div className="bg-red-950/50 border border-red-900 p-4 text-center">
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-xs p-4 text-center rounded-md">
             <p className="text-red-500 text-sm font-bold">ROOM NOT FOUND</p>
             <p className="text-zinc-500 text-sm mt-1">
               This room may have expired or never existed.
@@ -81,7 +84,7 @@ function Lobby() {
         )}
 
         {error === "room-full" && (
-          <div className="bg-red-950/50 border border-red-900 p-4 text-center">
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-xs p-4 text-center rounded-md">
             <p className="text-red-500 text-sm font-bold">ROOM FULL</p>
             <p className="text-zinc-500 text-sm mt-1">
               This room is at maximum capacity.

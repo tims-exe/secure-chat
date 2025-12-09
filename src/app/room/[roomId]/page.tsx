@@ -238,7 +238,7 @@ export default function RoomPage() {
       <header className="relative border-b border-zinc-800 p-4 flex flex-col md:flex-row md:items-center md:justify-between bg-zinc-900/30 gap-4 md:gap-0">
         <button
           onClick={() => destroyRoom()}
-          className="md:hidden absolute right-4 top-4 bg-red-700 hover:bg-red-700 text-white font-bold px-2 py-0.5 rounded transition-all text-[18px]"
+          className="cursor-pointer md:hidden absolute right-4 top-4 bg-red-700 hover:bg-red-700 text-white font-bold px-2 py-0.5 rounded transition-all text-[18px]"
         >
           ✖
         </button>
@@ -247,12 +247,12 @@ export default function RoomPage() {
           <div className="flex flex-col">
             <span className="text-[10px] text-zinc-500 uppercase">Room ID</span>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-green-500 text-sm md:text-base">
+              <span className="font-bold text-zinc-300 text-sm md:text-base">
                 {roomId}
               </span>
               <button
                 onClick={copyLink}
-                className="text-[9px] md:text-[10px] bg-zinc-800 hover:bg-zinc-700 px-2 py-0.5 rounded text-zinc-400 hover:text-zinc-200 transition-colors"
+                className="cursor-pointer text-[9px] md:text-[10px] bg-zinc-800 hover:bg-zinc-700 px-2 py-0.5 rounded text-zinc-400 hover:text-zinc-200 transition-colors"
               >
                 {copyStatus}
               </button>
@@ -296,7 +296,7 @@ export default function RoomPage() {
 
         <button
           onClick={() => destroyRoom()}
-          className="hidden md:flex text-sm bg-zinc-800 hover:bg-red-600 px-3 py-1.5 rounded text-zinc-400 hover:text-white font-bold transition-all group items-center gap-2 disabled:opacity-50"
+          className="cursor-pointer hidden md:flex text-sm bg-zinc-800 hover:bg-red-600 px-3 py-1.5 rounded text-zinc-400 hover:text-white font-bold transition-all group items-center gap-2 disabled:opacity-50"
         >
           {isDestroying ? "DESTROYING..." : "DESTROY NOW"}
         </button>
@@ -325,7 +325,7 @@ export default function RoomPage() {
               <div className="flex items-baseline gap-3 mb-1">
                 <span
                   className={`text-xs font-bold ${
-                    msg.sender === username ? "text-green-500" : "text-blue-500"
+                    msg.sender === username ? "text-red-500" : "text-green-500"
                   } `}
                 >
                   {msg.sender === username ? "YOU" : msg.sender}
@@ -377,7 +377,7 @@ export default function RoomPage() {
           <button
             onClick={handleSend}
             disabled={!input.trim() || !isEncryptionReady || sending}
-            className="bg-zinc-800 text-zinc-400 px-6 text-sm font-bold transition-all disabled:opacity-50"
+            className="bg-zinc-800 text-zinc-400 px-6 text-sm font-bold transition-all disabled:opacity-50 cursor-pointer"
           >
             {sending ? "..." : "SEND"}
           </button>
