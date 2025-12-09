@@ -49,9 +49,9 @@ export default function RoomPage() {
   const [myKeyPair, setMyKeyPair] = useState<KeyPair | null>(null);
   const [sharedKey, setSharedKey] = useState<CryptoKey | null>(null);
   const [isEncryptionReady, setIsEncryptionReady] = useState(false);
-  const [decryptedMessages, setDecryptedMessages] = useState<DecryptedMessage[]>(
-    []
-  );
+  const [decryptedMessages, setDecryptedMessages] = useState<
+    DecryptedMessage[]
+  >([]);
 
   const { data: ttlData } = useQuery({
     queryKey: ["ttl", roomId],
@@ -153,7 +153,7 @@ export default function RoomPage() {
             timestamp: msg.timestamp,
           });
         } catch (error) {
-          console.log(error)
+          console.log(error);
           decrypted.push({
             id: msg.id,
             sender: msg.sender,
@@ -193,12 +193,20 @@ export default function RoomPage() {
       if (event === "chat.destroy") router.push("/?destroyed=true");
 
       if (event === "chat.keyShared" && myKeyPair) {
-        const { username: otherUser, publicKey } = data;
+        const { username: otherUser, publicKey: publicKeyString } = data;
+
         if (otherUser !== username) {
-          const otherPublicKey = await importPublicKey(publicKey);
-          const shared = await deriveSharedKey(myKeyPair.privateKey, otherPublicKey);
-          setSharedKey(shared);
-          setIsEncryptionReady(true);
+          try {
+            const otherPublicKey = await importPublicKey(publicKeyString);
+            const shared = await deriveSharedKey(
+              myKeyPair.privateKey,
+              otherPublicKey
+            );
+            setSharedKey(shared);
+            setIsEncryptionReady(true);
+          } catch (error) {
+            console.error("Failed to establish encryption:", error);
+          }
         }
       }
     },
@@ -213,7 +221,7 @@ export default function RoomPage() {
   function handleSend() {
     if (!input.trim() || sending || !isEncryptionReady) return;
     const text = input;
-    setInput(""); // Clear immediately
+    setInput("");
     setSending(true);
     sendMessage({ text });
   }
@@ -226,14 +234,13 @@ export default function RoomPage() {
   }
 
   return (
-    <main className="flex flex-col h-screen max-h-screen overflow-hidden">
+    <main className="flex flex-col h-dvh max-h-dvh overflow-hidden">
       <header className="relative border-b border-zinc-800 p-4 flex flex-col md:flex-row md:items-center md:justify-between bg-zinc-900/30 gap-4 md:gap-0">
         <button
           onClick={() => destroyRoom()}
-          disabled={isDestroying}
-          className="md:hidden absolute right-4 top-4 bg-red-700 text-white font-bold px-2 py-0.5 rounded transition-all text-[18px] disabled:opacity-50"
+          className="md:hidden absolute right-4 top-4 bg-red-700 hover:bg-red-700 text-white font-bold px-2 py-0.5 rounded transition-all text-[18px]"
         >
-          {isDestroying ? "..." : "✖"}
+          ✖
         </button>
 
         <div className="flex flex-col md:flex-row md:items-center gap-4 w-full md:w-auto">
@@ -245,7 +252,7 @@ export default function RoomPage() {
               </span>
               <button
                 onClick={copyLink}
-                className="text-[9px] md:text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400"
+                className="text-[9px] md:text-[10px] bg-zinc-800 hover:bg-zinc-700 px-2 py-0.5 rounded text-zinc-400 hover:text-zinc-200 transition-colors"
               >
                 {copyStatus}
               </button>
@@ -260,7 +267,7 @@ export default function RoomPage() {
                 self destruct
               </span>
               <span
-                className={`text-xs md:text-sm font-bold ${
+                className={`text-xs md:text-sm font-bold flex items-center gap-2 ${
                   timeRemaining !== null && timeRemaining < 60
                     ? "text-red-500"
                     : "text-amber-500"
@@ -289,8 +296,7 @@ export default function RoomPage() {
 
         <button
           onClick={() => destroyRoom()}
-          disabled={isDestroying}
-          className="hidden md:flex text-sm bg-zinc-800 px-3 py-1.5 rounded text-zinc-400 font-bold transition-all items-center gap-2 disabled:opacity-50 hover:bg-red-700 cursor-pointer hover:text-white"
+          className="hidden md:flex text-sm bg-zinc-800 hover:bg-red-600 px-3 py-1.5 rounded text-zinc-400 hover:text-white font-bold transition-all group items-center gap-2 disabled:opacity-50"
         >
           {isDestroying ? "DESTROYING..." : "DESTROY NOW"}
         </button>
