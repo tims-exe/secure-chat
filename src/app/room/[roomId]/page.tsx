@@ -8,12 +8,29 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import {
+  generateKeyPair,
+  exportPublicKey,
+  importPublicKey,
+  deriveSharedKey,
+  encryptMessage,
+  decryptMessage,
+  KeyPair,
+} from "@/lib/crypto";
 
 function formatTimeRemaining(seconds: number) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
 
   return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+interface DecryptedMessage {
+  id: string;
+  sender: string;
+  text: string;
+  timestamp: number;
+  error?: boolean;
 }
 
 export default function RoomPage() {
@@ -26,6 +43,11 @@ export default function RoomPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { username } = useUsername();
   const router = useRouter();
+
+  const [myKeyPair, setMyKeyPair] = useState<KeyPair | null>(null);
+  const [sharedKey, setSharedKey] = useState<CryptoKey | null>(null);
+  const [isEncryptionReady, setIsEncryptionReady] = useState(false);
+  const [decryptedMessages, setDecryptedMessages] = useState<DecryptedMessage[]>([]);
 
   const { data: ttlData } = useQuery({
     queryKey: ["ttl", roomId],
@@ -66,6 +88,48 @@ export default function RoomPage() {
     return () => clearInterval(interval);
   }, [timeRemaining, router]);
 
+  useEffect(() => {
+    async function initKeys() {
+      try {
+        const keyPair = await generateKeyPair();
+        setMyKeyPair(keyPair);
+
+        const publicKeyString = await exportPublicKey(keyPair.publicKey);
+        await client.keys["share"].post(
+          {
+            publicKey: publicKeyString,
+            username,
+          },
+          {
+            query: { roomId },
+          }
+        );
+
+        const keysRes = await client.keys.get({
+          query: { roomId },
+        });
+
+        const otherUserKey = Object.entries(keysRes.data?.keys || {}).find(
+          ([user]) => user !== username
+        );
+
+        if (otherUserKey) {
+          const [, publicKeyString] = otherUserKey;
+          const otherPublicKey = await importPublicKey(publicKeyString as string);
+          const shared = await deriveSharedKey(keyPair.privateKey, otherPublicKey);
+          setSharedKey(shared);
+          setIsEncryptionReady(true);
+        }
+      } catch (error) {
+        console.error("Failed to initialize encryption:", error);
+      }
+    }
+
+    if (username && roomId) {
+      initKeys();
+    }
+  }, [username, roomId]);
+
   const { data: messages, refetch } = useQuery({
     queryKey: ["messages", roomId],
     queryFn: async () => {
@@ -74,12 +138,52 @@ export default function RoomPage() {
     },
   });
 
+  useEffect(() => {
+    async function decryptAllMessages() {
+      if (!messages?.messages || !sharedKey) return;
+
+      const decrypted: DecryptedMessage[] = [];
+
+      for (const msg of messages.messages) {
+        try {
+          const text = await decryptMessage(msg.ciphertext, msg.iv, sharedKey);
+          decrypted.push({
+            id: msg.id,
+            sender: msg.sender,
+            text,
+            timestamp: msg.timestamp,
+          });
+        } catch (error) {
+          console.error("Failed to decrypt message:", error);
+          decrypted.push({
+            id: msg.id,
+            sender: msg.sender,
+            text: "[Decryption failed]",
+            timestamp: msg.timestamp,
+            error: true,
+          });
+        }
+      }
+
+      setDecryptedMessages(decrypted);
+    }
+
+    decryptAllMessages();
+  }, [messages, sharedKey]);
+
   const { mutate: sendMessage, isPending } = useMutation({
     mutationFn: async ({ text }: { text: string }) => {
+      if (!sharedKey) {
+        throw new Error("Encryption not ready");
+      }
+
+      const { ciphertext, iv } = await encryptMessage(text, sharedKey);
+
       await client.messages.post(
         {
           sender: username,
-          text,
+          ciphertext,
+          iv,
         },
         {
           query: { roomId },
@@ -91,8 +195,8 @@ export default function RoomPage() {
 
   useRealtime({
     channels: [roomId],
-    events: ["chat.message", "chat.destroy"],
-    onData: ({ event }) => {
+    events: ["chat.message", "chat.destroy", "chat.keyShared"],
+    onData: async ({ event, data }) => {
       if (event === "chat.message") {
         refetch();
       }
@@ -100,10 +204,25 @@ export default function RoomPage() {
       if (event === "chat.destroy") {
         router.push("/?destroyed=true");
       }
+
+      if (event === "chat.keyShared" && myKeyPair) {
+        const { username: otherUser, publicKey: publicKeyString } = data;
+        
+        if (otherUser !== username) {
+          try {
+            const otherPublicKey = await importPublicKey(publicKeyString);
+            const shared = await deriveSharedKey(myKeyPair.privateKey, otherPublicKey);
+            setSharedKey(shared);
+            setIsEncryptionReady(true);
+          } catch (error) {
+            console.error("Failed to establish encryption:", error);
+          }
+        }
+      }
     },
   });
 
-  const {mutate: destroyRoom } = useMutation({
+  const { mutate: destroyRoom } = useMutation({
     mutationFn: async () => {
       await client.room.delete(null, { query: { roomId } });
     },
@@ -151,22 +270,47 @@ export default function RoomPage() {
                 : "--:--"}
             </span>
           </div>
+
+          <div className="h-8 w-px bg-zinc-800 " />
+
+          <div className="flex flex-col">
+            <span className="text-xs text-zinc-500 uppercase">Encryption</span>
+            <span
+              className={`text-sm font-bold ${
+                isEncryptionReady ? "text-green-500" : "text-yellow-500"
+              }`}
+            >
+              {isEncryptionReady ? "🔒 ACTIVE" : "⏳ WAITING"}
+            </span>
+          </div>
         </div>
 
-        <button onClick={() => destroyRoom()} 
-        className="text-sm bg-zinc-800 hover:bg-red-600 px-3 py-1.5 rounded text-zinc-400 hover:text-white font-bold transition-all group flex items-center gap-2 disabled:opacity-50">
+        <button
+          onClick={() => destroyRoom()}
+          className="text-sm bg-zinc-800 hover:bg-red-600 px-3 py-1.5 rounded text-zinc-400 hover:text-white font-bold transition-all group flex items-center gap-2 disabled:opacity-50"
+        >
           DESTROY NOW
         </button>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
-        {messages?.messages.length === 0 && (
+        {!isEncryptionReady && (
           <div className="flex items-center justify-center h-full">
-            <p className="text-zinc-600 text-sm font-mono">No messages</p>
+            <p className="text-yellow-500 text-sm font-mono">
+              Waiting for secure connection...
+            </p>
           </div>
         )}
 
-        {messages?.messages.map((msg) => (
+        {isEncryptionReady && decryptedMessages.length === 0 && (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-zinc-600 text-sm font-mono">
+              No messages • End-to-end encrypted
+            </p>
+          </div>
+        )}
+
+        {decryptedMessages.map((msg) => (
           <div key={msg.id} className="flex flex-col items-start">
             <div className="max-w-[80%] group">
               <div className="flex items-baseline gap-3 mb-1">
@@ -181,8 +325,13 @@ export default function RoomPage() {
                 <span className="text-[10px] text-zinc-600 ">
                   {format(msg.timestamp, "HH:mm")}
                 </span>
+
               </div>
-              <p className="text-sm text-zinc-300 leading-relaxed break-all">
+              <p
+                className={`text-sm leading-relaxed break-all ${
+                  msg.error ? "text-red-500 italic" : "text-zinc-300"
+                }`}
+              >
                 {msg.text}
               </p>
             </div>
@@ -200,15 +349,20 @@ export default function RoomPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && input.trim()) {
+                if (e.key === "Enter" && input.trim() && isEncryptionReady) {
                   sendMessage({ text: input });
                   inputRef.current?.focus();
                 }
               }}
               autoFocus
               type="text"
-              placeholder="Type message..."
-              className="w-full bg-black border border-zinc-800 focus:border-zinc-700 focus:outline-none transition-colors text-zinc-100 placeholder:text-zinc-700 py-3 pl-8 pr-4 text-sm"
+              placeholder={
+                isEncryptionReady
+                  ? "Type encrypted message..."
+                  : "Waiting for encryption..."
+              }
+              disabled={!isEncryptionReady}
+              className="w-full bg-black border border-zinc-800 focus:border-zinc-700 focus:outline-none transition-colors text-zinc-100 placeholder:text-zinc-700 py-3 pl-8 pr-4 text-sm disabled:opacity-50"
             />
           </div>
 
@@ -217,7 +371,7 @@ export default function RoomPage() {
               sendMessage({ text: input });
               inputRef.current?.focus();
             }}
-            disabled={!input.trim() || isPending}
+            disabled={!input.trim() || isPending || !isEncryptionReady}
             className="bg-zinc-800 text-zinc-400 px-6 text-sm font-bold hover:text-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             SEND
