@@ -1,43 +1,20 @@
 "use client"
 
+import { useUsername } from "@/hooks/use-username";
 import { client } from "@/lib/client";
 import { useMutation } from "@tanstack/react-query";
-import { nanoid } from "nanoid";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 
-const ANIMALS = ["wolf", "hawk", "bear", "shark"]
-const STORAGE_KEY = "chat_username"
-
-
-const generateUsername = () => {
-  const word = ANIMALS[Math.floor(Math.random() * ANIMALS.length)]  
-
-  return `anonymous-${word}-${nanoid(5)}`
-}
 
 export default function Home() {
-  const [username, setUsername] = useState("")
   const router = useRouter()
 
-  useEffect(() => {
-    const main = () => {
-      const stored = localStorage.getItem(STORAGE_KEY)
+  const { username } = useUsername()
+  const searchParams = useSearchParams()
 
-      if (stored) {
-        setUsername(stored)
-        return
-      }
-
-      const generated = generateUsername()
-
-      localStorage.setItem(STORAGE_KEY, generated)
-      setUsername(generated)
-    }
-
-    main()
-  }, [])
+  const wasDestroyed = searchParams.get("destroyed") === "true"
+  const error = searchParams.get("error")
 
   const { mutate: createRoom } = useMutation({
     mutationFn: async () => {
@@ -75,6 +52,34 @@ export default function Home() {
             </button>
           </div>
         </div>
+
+        {wasDestroyed && <div className="bg-red-950/50 border border-red-900 p-4 text-center">
+          <p className="text-red-500 text-sm font-bold">
+            ROOM DESTROYED
+          </p>
+          <p className="text-zinc-500 text-sm mt-1">
+            All messages were permanently deleted.
+          </p>
+          </div>}
+        
+        {error === "room-not-found" && <div className="bg-red-950/50 border border-red-900 p-4 text-center">
+          <p className="text-red-500 text-sm font-bold">
+            ROOM NOT FOUND
+          </p>
+          <p className="text-zinc-500 text-sm mt-1">
+            This room may have expired or never existed.
+          </p>
+          </div>}
+        
+        {error === "room-full" && <div className="bg-red-950/50 border border-red-900 p-4 text-center">
+          <p className="text-red-500 text-sm font-bold">
+            ROOM FULL
+          </p>
+          <p className="text-zinc-500 text-sm mt-1">
+            This room is at maximum capacity.
+          </p>
+          </div>}
+
       </div>
     </main>
   );
